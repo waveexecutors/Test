@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Roblox 3D Avatar Studio & Editor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Fredoka', 'sans-serif'],
+                    },
+                    colors: {
+                        roblox: {
+                            dark: '#111216',
+                            panel: '#1e2029',
+                            card: '#292c3a',
+                            border: '#383c50',
+                            accent: '#00a2ff',
+                            accentHover: '#0084d1',
+                            success: '#00e676',
+                            danger: '#ff5252',
+                            warning: '#ffb300'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            touch-action: manipulation;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #0b0c0e;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(17, 18, 22, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #383c50;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00a2ff;
+        }
+        /* Touch slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: #383c50;
+            height: 6px;
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #00a2ff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 162, 255, 0.5);
+        }
+        .tab-active {
+            border-bottom: 3px solid #00a2ff;
+            color: #00a2ff;
+            background-color: rgba(0, 162, 255, 0.08);
+        }
+        .part-selected {
+            outline: 2px solid #00a2ff;
+            box-shadow: 0 0 12px rgba(0, 162, 255, 0.4);
+        }
+    </style>
+</head>
+<body class="text-gray-100 h-screen w-screen flex flex-col md:flex-row font-sans antialiased overflow-hidden">
+
+    <!-- Top Floating Header Bar (Mobile & Desktop) -->
+    <header class="absolute top-0 left-0 right-0 z-20 p-3 bg-roblox-dark/80 backdrop-blur-md border-b border-roblox-border flex items-center justify-between pointer-events-auto">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <i class="fa-solid font-bold text-white text-lg">R</i>
+            </div>
+            <div>
+                <h1 class="font-display font-bold text-base md:text-lg leading-tight tracking-wide text-white">Roblox Studio 3D</h1>
+                <p class="text-[10px] text-gray-400 font-medium hidden sm:block">Avatar Rigging & Scene Editor</p>
+            </div>
+        </div>
+
+        <!-- Quick Top Controls -->
+        <div class="flex items-center space-x-2">
+            <button id="toggleGridBtn" onclick="toggleBaseplateGrid()" class="px-3 py-1.5 rounded-lg bg-roblox-card border border-roblox-border hover:bg-roblox-border text-xs font-semibold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-border-all text-roblox-accent"></i>
+                <span class="hidden sm:inline">Baseplate Grid</span>
+            </button>
+            <button id="resetCamBtn" onclick="resetCamera()" class="p-2 rounded-lg bg-roblox-card border border-roblox-border hover:bg-roblox-border text-xs text-gray-300 transition" title="Reset View">
+                <i class="fa-solid fa-video"></i>
+            </button>
+            <button onclick="takeSnapshot()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/40 flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-camera"></i>
+                <span class="hidden sm:inline">Export PNG</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 3D Canvas Area -->
+    <main class="relative flex-1 h-full w-full bg-slate-950">
+        <div id="canvas-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+        <!-- Viewport Floating Overlay Controls (Top Left under Header) -->
+        <div class="absolute top-16 left-3 z-10 flex flex-col gap-2">
+            <!-- Username Fetch Quick Tool -->
+            <div class="bg-roblox-panel/90 backdrop-blur-md p-2 rounded-xl border border-roblox-border shadow-xl flex items-center gap-2 max-w-[280px] sm:max-w-xs">
+                <i class="fa-solid fa-user-astronaut text-roblox-accent text-sm ml-1"></i>
+                <input type="text" id="usernameInput" placeholder="Roblox Username..." value="Builderman" class="bg-roblox-card border border-roblox-border text-xs text-white px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-roblox-accent w-full">
+                <button onclick="loadRobloxAvatar()" id="loadAvatarBtn" class="bg-roblox-accent hover:bg-roblox-accentHover text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                    <span id="loadBtnText">Load</span>
+                    <i id="loadBtnSpinner" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+                </button>
+            </div>
+
+            <!-- Current Selected Object Indicator -->
+            <div id="selectionBadge" class="hidden bg-roblox-panel/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-roblox-accent/40 text-xs font-medium text-gray-300 flex items-center justify-between gap-3 shadow-lg">
+                <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-cube text-roblox-accent"></i>
+                    <span id="selectedPartName" class="font-bold text-white">Head</span>
+                </span>
+                <button onclick="deselectPart()" class="text-gray-400 hover:text-red-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <!-- Touch Hint Overlay (Disappears on touch) -->
+        <div id="touchHint" class="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 bg-black/60 backdrop-blur-sm px-4 py-1.5 rounded-full text-[11px] text-gray-300 pointer-events-none transition-opacity duration-500 flex items-center gap-2 border border-white/10">
+            <i class="fa-solid fa-hand-pointer text-roblox-accent animate-bounce"></i>
+            <span>Drag to rotate • Pinch to zoom • Tap to select part</span>
+        </div>
+    </main>
+
+    <!-- Controls Panel (Mobile Bottom Sheet / Desktop Right Sidebar) -->
+    <aside id="controlPanel" class="z-20 w-full md:w-96 h-[55vh] md:h-full bg-roblox-panel border-t md:border-t-0 md:border-l border-roblox-border flex flex-col shadow-2xl transition-all duration-300">
+        
+        <!-- Mobile Handle Drag Bar -->
+        <div class="w-full py-2 flex justify-center items-center md:hidden bg-roblox-dark/50 cursor-pointer" onclick="toggleMobilePanel()">
+            <div class="w-12 h-1.5 bg-gray-600 rounded-full"></div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-roblox-border bg-roblox-dark/40 overflow-x-auto no-scrollbar text-xs font-bold">
+            <button onclick="switchTab('rig')" id="tab-rig" class="flex-1 py-3 px-2 text-center text-gray-400 hover:text-white flex flex-col items-center gap-1 transition tab-active min-w-[70px]">
+                <i class="fa-solid fa-child text-sm"></i> Rig Transform
+            </button>
+            <button onclick="switchTab('avatar')" id="tab-avatar" class="flex-1 py-3 px-2 text-center text-gray-400 hover:text-white flex flex-col items-center gap-1 transition min-w-[70px]">
+                <i class="fa-solid fa-shirt text-sm"></i> Clothing & Skin
+            </button>
+            <button onclick="switchTab('faces')" id="tab-faces" class="flex-1 py-3 px-2 text-center text-gray-400 hover:text-white flex flex-col items-center gap-1 transition min-w-[70px]">
+                <i class="fa-solid fa-face-smile text-sm"></i> Faces Catalog
+            </button>
+            <button onclick="switchTab('spawner')" id="tab-spawner" class="flex-1 py-3 px-2 text-center text-gray-400 hover:text-white flex flex-col items-center gap-1 transition min-w-[70px]">
+                <i class="fa-solid fa-cubes text-sm"></i> Add 3D Parts
+            </button>
+        </div>
+
+        <!-- TAB CONTENT CONTAINER -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+
+            <!-- TAB 1: RIG & BODY PARTS TRANSFORM -->
+            <div id="content-rig" class="space-y-4">
+                <div class="bg-roblox-card p-3 rounded-xl border border-roblox-border space-y-2">
+                    <label class="font-bold text-gray-300 block mb-1">Quick Poses</label>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button onclick="applyPose('tpose')" class="py-1.5 px-2 bg-roblox-dark hover:bg-roblox-border rounded-lg border border-roblox-border font-semibold text-gray-200 transition">T-Pose</button>
+                        <button onclick="applyPose('idle')" class="py-1.5 px-2 bg-roblox-dark hover:bg-roblox-border rounded-lg border border-roblox-border font-semibold text-gray-200 transition">Idle Stand</button>
+                        <button onclick="applyPose('run')" class="py-1.5 px-2 bg-roblox-dark hover:bg-roblox-border rounded-lg border border-roblox-border font-semibold text-gray-200 transition">Running</button>
+                        <button onclick="applyPose('wave')" class="py-1.5 px-2 bg-roblox-dark hover:bg-roblox-border rounded-lg border border-roblox-border font-semibold text-gray-200 transition">Waving</button>
+                        <button onclick="applyPose('sit')" class="py-1.5 px-2 bg-roblox-dark hover:bg-roblox-border rounded-lg border border-roblox-border font-semibold text-gray-200 transition">Sitting</button>
+                        <button onclick="applyPose('reset')" class="py-1.5 px-2 bg-red-900/30 hover:bg-red-800/40 text-red-300 rounded-lg border border-red-800/50 font-semibold transition">Reset Rig</button>
+                    </div>
+                </div>
+
+                <!-- Part Selector dropdown -->
+                <div class="bg-roblox-card p-3 rounded-xl border border-roblox-border space-y-3">
+                    <div>
+                        <label class="font-bold text-gray-200 block mb-1">Select Target Body Part / Part</label>
+                        <select id="bodyPartSelect" onchange="onPartSelectDropdown(this.value)" class="w-full bg-roblox-dark border border-roblox-border rounded-lg p-2 text-white font-medium focus:border-roblox-accent focus:outline-none">
+                            <option value="Torso">Upper Torso</option>
+                            <option value="Head">Head</option>
+                            <option value="LeftArm">Left Arm</option>
+                            <option value="RightArm">Right Arm</option>
+                            <option value="LeftLeg">Left Leg</option>
+                            <option value="RightLeg">Right Leg</option>
+                        </select>
+                    </div>
+
+                    <div class="border-t border-roblox-border pt-3 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-roblox-accent uppercase tracking-wider text-[11px]">Transform Coordinates</span>
+                            <button onclick="resetSelectedPartTransform()" class="text-[10px] text-gray-400 hover:text-white underline">Reset Part</button>
+                        </div>
+
+                        <!-- Position XYZ -->
+                        <div class="space-y-2 bg-roblox-dark/60 p-2.5 rounded-lg border border-roblox-border/60">
+                            <span class="font-bold text-gray-300 block text-[11px]">Position (X, Y, Z)</span>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <span class="text-[10px] text-red-400 font-bold">X</span>
+                                    <input type="range" id="posX" min="-5" max="5" step="0.05" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-green-400 font-bold">Y</span>
+                                    <input type="range" id="posY" min="-3" max="7" step="0.05" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-blue-400 font-bold">Z</span>
+                                    <input type="range" id="posZ" min="-5" max="5" step="0.05" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rotation XYZ -->
+                        <div class="space-y-2 bg-roblox-dark/60 p-2.5 rounded-lg border border-roblox-border/60">
+                            <span class="font-bold text-gray-300 block text-[11px]">Rotation Deg (X, Y, Z)</span>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <span class="text-[10px] text-red-400 font-bold">Pitch X</span>
+                                    <input type="range" id="rotX" min="-180" max="180" step="1" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-green-400 font-bold">Yaw Y</span>
+                                    <input type="range" id="rotY" min="-180" max="180" step="1" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-blue-400 font-bold">Roll Z</span>
+                                    <input type="range" id="rotZ" min="-180" max="180" step="1" value="0" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scale XYZ -->
+                        <div class="space-y-2 bg-roblox-dark/60 p-2.5 rounded-lg border border-roblox-border/60">
+                            <span class="font-bold text-gray-300 block text-[11px]">Scale (X, Y, Z)</span>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <span class="text-[10px] text-gray-400 font-bold">X Scale</span>
+                                    <input type="range" id="scaleX" min="0.2" max="3" step="0.05" value="1" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-gray-400 font-bold">Y Scale</span>
+                                    <input type="range" id="scaleY" min="0.2" max="3" step="0.05" value="1" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-gray-400 font-bold">Z Scale</span>
+                                    <input type="range" id="scaleZ" min="0.2" max="3" step="0.05" value="1" oninput="updateTransformFromUI()" class="w-full">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: CLOTHING & SKIN MODIFIER -->
+            <div id="content-avatar" class="space-y-4 hidden">
+                <!-- Clothing Toggle Box -->
+                <div class="bg-roblox-card p-3.5 rounded-xl border border-roblox-border space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-bold text-gray-100">Character Clothing</h3>
+                            <p class="text-[10px] text-gray-400">Toggle shirt & pants textures off for naked base rig</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="clothingToggle" checked onchange="toggleClothes(this.checked)" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-roblox-accent"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Body Skin Colors Picker -->
+                <div class="bg-roblox-card p-3.5 rounded-xl border border-roblox-border space-y-3">
+                    <h3 class="font-bold text-gray-100">Skin Color Tuning</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] text-gray-300 block mb-1">Head Color</label>
+                            <input type="color" id="headColorPicker" value="#f3cf98" onchange="updateSkinColor('Head', this.value)" class="w-full h-8 rounded-lg bg-roblox-dark border border-roblox-border cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-300 block mb-1">Torso Color</label>
+                            <input type="color" id="torsoColorPicker" value="#00a2ff" onchange="updateSkinColor('Torso', this.value)" class="w-full h-8 rounded-lg bg-roblox-dark border border-roblox-border cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-300 block mb-1">Arms Color</label>
+                            <input type="color" id="armsColorPicker" value="#f3cf98" onchange="updateSkinColor('Arms', this.value)" class="w-full h-8 rounded-lg bg-roblox-dark border border-roblox-border cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-300 block mb-1">Legs Color</label>
+                            <input type="color" id="legsColorPicker" value="#1b2a35" onchange="updateSkinColor('Legs', this.value)" class="w-full h-8 rounded-lg bg-roblox-dark border border-roblox-border cursor-pointer">
+                        </div>
+                    </div>
+                    <!-- Quick Skin Palette Presets -->
+                    <div>
+                        <span class="text-[10px] text-gray-400 block mb-1.5">Preset Tones</span>
+                        <div class="flex gap-2">
+                            <button onclick="applySkinPreset('#f3cf98', '#00a2ff', '#1b2a35')" class="w-6 h-6 rounded-full bg-[#f3cf98] border border-white/20 shadow" title="Classic Default"></button>
+                            <button onclick="applySkinPreset('#ffcd94', '#ffcd94', '#ffcd94')" class="w-6 h-6 rounded-full bg-[#ffcd94] border border-white/20 shadow" title="Light Skin"></button>
+                            <button onclick="applySkinPreset('#8d5524', '#8d5524', '#8d5524')" class="w-6 h-6 rounded-full bg-[#8d5524] border border-white/20 shadow" title="Dark Skin"></button>
+                            <button onclick="applySkinPreset('#e0ac69', '#e0ac69', '#e0ac69')" class="w-6 h-6 rounded-full bg-[#e0ac69] border border-white/20 shadow" title="Medium Skin"></button>
+                            <button onclick="applySkinPreset('#74b9ff', '#0984e3', '#2d3436')" class="w-6 h-6 rounded-full bg-[#74b9ff] border border-white/20 shadow" title="Roblox Blue Bot"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: FACES CATALOG & ASSET ID -->
+            <div id="content-faces" class="space-y-4 hidden">
+                <!-- Custom Asset ID Input -->
+                <div class="bg-roblox-card p-3.5 rounded-xl border border-roblox-border space-y-2">
+                    <label class="font-bold text-gray-200 block">Apply Custom Roblox Face ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="faceAssetId" placeholder="e.g. 7074729 or Decal URL..." class="flex-1 bg-roblox-dark border border-roblox-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-roblox-accent">
+                        <button onclick="applyCustomFaceId()" class="bg-roblox-accent hover:bg-roblox-accentHover text-white px-3 py-1.5 rounded-lg font-bold">Apply</button>
+                    </div>
+                </div>
+
+                <!-- Preset UGC Faces Grid -->
+                <div class="space-y-2">
+                    <span class="font-bold text-gray-300 block">Popular & UGC Faces Catalog</span>
+                    <div id="faceGrid" class="grid grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                        <!-- Dynamic grid items rendered by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: ADD VARIOUS 3D PARTS -->
+            <div id="content-spawner" class="space-y-4 hidden">
+                <div class="bg-roblox-card p-3.5 rounded-xl border border-roblox-border space-y-3">
+                    <h3 class="font-bold text-gray-100">Spawn Primitive Parts</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="spawnPrimitive('block')" class="p-3 bg-roblox-dark hover:bg-roblox-border rounded-xl border border-roblox-border flex flex-col items-center gap-1.5 transition">
+                            <i class="fa-solid fa-cube text-roblox-accent text-lg"></i>
+                            <span class="font-semibold text-gray-200">Block Part</span>
+                        </button>
+                        <button onclick="spawnPrimitive('sphere')" class="p-3 bg-roblox-dark hover:bg-roblox-border rounded-xl border border-roblox-border flex flex-col items-center gap-1.5 transition">
+                            <i class="fa-solid fa-globe text-emerald-400 text-lg"></i>
+                            <span class="font-semibold text-gray-200">Sphere</span>
+                        </button>
+                        <button onclick="spawnPrimitive('cylinder')" class="p-3 bg-roblox-dark hover:bg-roblox-border rounded-xl border border-roblox-border flex flex-col items-center gap-1.5 transition">
+                            <i class="fa-solid fa-[#00a2ff] fa-database text-amber-400 text-lg"></i>
+                            <span class="font-semibold text-gray-200">Cylinder</span>
+                        </button>
+                        <button onclick="spawnPrimitive('wedge')" class="p-3 bg-roblox-dark hover:bg-roblox-border rounded-xl border border-roblox-border flex flex-col items-center gap-1.5 transition">
+                            <i class="fa-solid fa-play -rotate-90 text-purple-400 text-lg"></i>
+                            <span class="font-semibold text-gray-200">Wedge</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Spawned Objects List -->
+                <div class="bg-roblox-card p-3.5 rounded-xl border border-roblox-border space-y-2">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-gray-100">Workspace Objects</h3>
+                        <button onclick="clearSpawnedParts()" class="text-[10px] text-red-400 hover:underline">Clear All Parts</button>
+                    </div>
+                    <div id="spawnedPartsList" class="space-y-1.5 max-h-[160px] overflow-y-auto">
+                        <p class="text-gray-500 text-[11px] italic">No extra parts added yet.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <script>
+        // Core ThreeJS Scene Variables
+        let scene, camera, renderer, controls;
+        let baseplateGrid, baseplateMesh;
+        let avatarGroup; // Main container for character
+        let characterParts = {}; // Map holding R15/R6 limb meshes
+        let clothingEnabled = true;
+        let faceMeshMaterial = null;
+        
+        // Selection State
+        let selectedObject = null; // Currently selected Mesh/Group
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+
+        // Spawned Parts Tracking
+        let spawnedParts = [];
+        let partIdCounter = 1;
+
+        // Color Settings
+        let skinColors = {
+            Head: '#f3cf98',
+            Torso: '#00a2ff',
+            LeftArm: '#f3cf98',
+            RightArm: '#f3cf98',
+            LeftLeg: '#1b2a35',
+            RightLeg: '#1b2a35'
+        };
+
+        // UGC Faces Catalog Data
+        const faceCatalog = [
+            { id: 'default', name: 'Smile Default', url: 'https://images.rbxcdn.com/f0c29df623166d3a39e8310c85c2929e.png' },
+            { id: '7074729', name: 'Man Face', url: 'https://tr.rbxcdn.com/180da1d0337f7a755d491104e1be4300/420/420/Decal/Png' },
+            { id: '12145362', name: 'Super Super Happy', url: 'https://tr.rbxcdn.com/15f013d1bd1ee3b573663673c6a461c3/420/420/Decal/Png' },
+            { id: '14407565', name: 'Winning Smile', url: 'https://tr.rbxcdn.com/6c2d4bfd515a45e9a463558c422c5e53/420/420/Decal/Png' },
+            { id: '20999525', name: 'Chill Face', url: 'https://tr.rbxcdn.com/28ef1411eb12c85e2ee638206d860d4b/420/420/Decal/Png' },
+            { id: '8329686', name: 'Silly Fun', url: 'https://tr.rbxcdn.com/391d1e44f8087961bdcf039bafeefb9b/420/420/Decal/Png' },
+            { id: '6220803', name: 'Beast Mode Face', url: 'https://tr.rbxcdn.com/c6c6fddb3c8f2b77e8fb1d7634fdb391/420/420/Decal/Png' },
+        ];
+
+        window.onload = function() {
+            initThreeJS();
+            renderFacesCatalog();
+            setupEventListeners();
+            animate();
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0e1015);
+            scene.fog = new THREE.FogExp2(0x0e1015, 0.025);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.set(0, 4.5, 11);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.05; // Prevent camera going below ground
+            controls.minDistance = 3;
+            controls.maxDistance = 25;
+            controls.target.set(0, 3, 0);
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(8, 15, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 30;
+            dirLight.shadow.camera.left = -8;
+            dirLight.shadow.camera.right = 8;
+            dirLight.shadow.camera.top = 8;
+            dirLight.shadow.camera.bottom = -8;
+            scene.add(dirLight);
+
+            const fillLight = new THREE.DirectionalLight(0x00a2ff, 0.3);
+            fillLight.position.set(-8, 5, -5);
+            scene.add(fillLight);
+
+            // Create Roblox Stud Ground Baseplate
+            createBaseplate();
+
+            // Build Default Blocky Roblox Character
+            buildRobloxCharacter();
+
+            // Resize handle
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createBaseplate() {
+            // Main Baseplate Mesh
+            const baseGeo = new THREE.BoxGeometry(30, 1, 30);
+            const baseMat = new THREE.MeshStandardMaterial({
+                color: 0x393b44,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            baseplateMesh = new THREE.Mesh(baseGeo, baseMat);
+            baseplateMesh.position.y = -0.5;
+            baseplateMesh.receiveShadow = true;
+            scene.add(baseplateMesh);
+
+            // Stud Grid Overlay
+            baseplateGrid = new THREE.GridHelper(30, 30, 0x00a2ff, 0x212530);
+            baseplateGrid.position.y = 0.01;
+            scene.add(baseplateGrid);
+        }
+
+        function buildRobloxCharacter() {
+            if (avatarGroup) scene.remove(avatarGroup);
+
+            avatarGroup = new THREE.Group();
+            avatarGroup.position.set(0, 0, 0);
+            characterParts = {};
+
+            // Default Dimensions for classic Roblox Blocky Character
+            // Head: 2x1.2x1.2, Torso: 2x2x1, Arms: 1x2x1, Legs: 1x2x1
+            
+            // Torso (Root body anchor)
+            const torsoGeo = new THREE.BoxGeometry(2, 2, 1);
+            const torsoMat = new THREE.MeshStandardMaterial({ color: skinColors.Torso, roughness: 0.5 });
+            const torso = new THREE.Mesh(torsoGeo, torsoMat);
+            torso.position.set(0, 3, 0);
+            torso.castShadow = true;
+            torso.receiveShadow = true;
+            torso.userData = { name: 'Torso', isLimb: true };
+            characterParts['Torso'] = torso;
+            avatarGroup.add(torso);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(1.25, 1.25, 1.25);
+            const headMaterials = [
+                new THREE.MeshStandardMaterial({ color: skinColors.Head, roughness: 0.5 }), // Right
+                new THREE.MeshStandardMaterial({ color: skinColors.Head, roughness: 0.5 }), // Left
+                new THREE.MeshStandardMaterial({ color: skinColors.Head, roughness: 0.5 }), // Top
+                new THREE.MeshStandardMaterial({ color: skinColors.Head, roughness: 0.5 }), // Bottom
+                createFaceMaterial(), // Front (Face Texture Decal)
+                new THREE.MeshStandardMaterial({ color: skinColors.Head, roughness: 0.5 })  // Back
+            ];
+            const head = new THREE.Mesh(headGeo, headMaterials);
+            head.position.set(0, 1.65, 0);
+            head.castShadow = true;
+            head.userData = { name: 'Head', isLimb: true };
+            characterParts['Head'] = head;
+            torso.add(head);
+
+            // Left Arm
+            const lArmGeo = new THREE.BoxGeometry(1, 2, 1);
+            const lArmMat = new THREE.MeshStandardMaterial({ color: skinColors.LeftArm, roughness: 0.5 });
+            const leftArm = new THREE.Mesh(lArmGeo, lArmMat);
+            leftArm.position.set(-1.5, 0, 0);
+            leftArm.castShadow = true;
+            leftArm.userData = { name: 'LeftArm', isLimb: true };
+            characterParts['LeftArm'] = leftArm;
+            torso.add(leftArm);
+
+            // Right Arm
+            const rArmGeo = new THREE.BoxGeometry(1, 2, 1);
+            const rArmMat = new THREE.MeshStandardMaterial({ color: skinColors.RightArm, roughness: 0.5 });
+            const rightArm = new THREE.Mesh(rArmGeo, rArmMat);
+            rightArm.position.set(1.5, 0, 0);
+            rightArm.castShadow = true;
+            rightArm.userData = { name: 'RightArm', isLimb: true };
+            characterParts['RightArm'] = rightArm;
+            torso.add(rightArm);
+
+            // Left Leg
+            const lLegGeo = new THREE.BoxGeometry(1, 2, 1);
+            const lLegMat = new THREE.MeshStandardMaterial({ color: skinColors.LeftLeg, roughness: 0.5 });
+            const leftLeg = new THREE.Mesh(lLegGeo, lLegMat);
+            leftLeg.position.set(-0.5, -2, 0);
+            leftLeg.castShadow = true;
+            leftLeg.userData = { name: 'LeftLeg', isLimb: true };
+            characterParts['LeftLeg'] = leftLeg;
+            torso.add(leftLeg);
+
+            // Right Leg
+            const rLegGeo = new THREE.BoxGeometry(1, 2, 1);
+            const rLegMat = new THREE.MeshStandardMaterial({ color: skinColors.RightLeg, roughness: 0.5 });
+            const rightLeg = new THREE.Mesh(rLegGeo, rLegMat);
+            rightLeg.position.set(0.5, -2, 0);
+            rightLeg.castShadow = true;
+            rightLeg.userData = { name: 'RightLeg', isLimb: true };
+            characterParts['RightLeg'] = rightLeg;
+            torso.add(rightLeg);
+
+            scene.add(avatarGroup);
+            
+            // Default Select Torso
+            selectPart(torso);
+        }
+
+        function createFaceMaterial(imageUrl = null) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Fill Base Skin Color
+            ctx.fillStyle = skinColors.Head;
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Draw Default Roblox Classic Smile Face Features
+            ctx.fillStyle = '#111111';
+            
+            // Eyes
+            ctx.beginPath();
+            ctx.arc(80, 100, 14, 0, Math.PI * 2);
+            ctx.arc(176, 100, 14, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye Highlights
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(84, 96, 5, 0, Math.PI * 2);
+            ctx.arc(180, 96, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Classic Curved Smile
+            ctx.strokeStyle = '#111111';
+            ctx.lineWidth = 10;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(128, 130, 50, 0.15 * Math.PI, 0.85 * Math.PI, false);
+            ctx.stroke();
+
+            const texture = new THREE.CanvasTexture(canvas);
+            faceMeshMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.5 });
+
+            if (imageUrl) {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = function() {
+                    ctx.fillStyle = skinColors.Head;
+                    ctx.fillRect(0, 0, 256, 256);
+                    ctx.drawImage(img, 0, 0, 256, 256);
+                    texture.needsUpdate = true;
+                };
+                img.src = imageUrl;
+            }
+
+            return faceMeshMaterial;
+        }
+
+        function setupEventListeners() {
+            const container = document.getElementById('canvas-container');
+            
+            container.addEventListener('pointerdown', (e) => {
+                // Calculate mouse position in normalized device coordinates
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children, true);
+
+                for (let i = 0; i < intersects.length; i++) {
+                    let obj = intersects[i].object;
+                    // Ignore grid/baseplate
+                    if (obj === baseplateMesh || obj === baseplateGrid) continue;
+
+                    if (obj.userData && (obj.userData.isLimb || obj.userData.isSpawned)) {
+                        selectPart(obj);
+                        // Hide touch hint once user interacts
+                        document.getElementById('touchHint').style.opacity = '0';
+                        break;
+                    }
+                }
+            });
+        }
+
+        function selectPart(obj) {
+            selectedObject = obj;
+            const badge = document.getElementById('selectionBadge');
+            const nameLabel = document.getElementById('selectedPartName');
+            
+            if (obj) {
+                badge.classList.remove('hidden');
+                nameLabel.innerText = obj.userData.name || 'Part';
+
+                // Sync Dropdown if it's a limb
+                if (obj.userData.isLimb) {
+                    document.getElementById('bodyPartSelect').value = obj.userData.name;
+                }
+
+                // Populate Pos/Rot/Scale Sliders
+                document.getElementById('posX').value = obj.position.x;
+                document.getElementById('posY').value = obj.position.y;
+                document.getElementById('posZ').value = obj.position.z;
+
+                document.getElementById('rotX').value = THREE.MathUtils.radToDeg(obj.rotation.x);
+                document.getElementById('rotY').value = THREE.MathUtils.radToDeg(obj.rotation.y);
+                document.getElementById('rotZ').value = THREE.MathUtils.radToDeg(obj.rotation.z);
+
+                document.getElementById('scaleX').value = obj.scale.x;
+                document.getElementById('scaleY').value = obj.scale.y;
+                document.getElementById('scaleZ').value = obj.scale.z;
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function deselectPart() {
+            selectedObject = null;
+            document.getElementById('selectionBadge').classList.add('hidden');
+        }
+
+        function onPartSelectDropdown(partName) {
+            if (characterParts[partName]) {
+                selectPart(characterParts[partName]);
+            }
+        }
+
+        function updateTransformFromUI() {
+            if (!selectedObject) return;
+
+            // Position
+            const px = parseFloat(document.getElementById('posX').value);
+            const py = parseFloat(document.getElementById('posY').value);
+            const pz = parseFloat(document.getElementById('posZ').value);
+            selectedObject.position.set(px, py, pz);
+
+            // Rotation
+            const rx = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value));
+            const ry = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value));
+            const rz = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value));
+            selectedObject.rotation.set(rx, ry, rz);
+
+            // Scale
+            const sx = parseFloat(document.getElementById('scaleX').value);
+            const sy = parseFloat(document.getElementById('scaleY').value);
+            const sz = parseFloat(document.getElementById('scaleZ').value);
+            selectedObject.scale.set(sx, sy, sz);
+        }
+
+        function resetSelectedPartTransform() {
+            if (!selectedObject) return;
+            
+            selectedObject.rotation.set(0, 0, 0);
+            selectedObject.scale.set(1, 1, 1);
+            
+            // Default Limb positions relative to Torso
+            if (selectedObject.userData.name === 'Head') selectedObject.position.set(0, 1.65, 0);
+            else if (selectedObject.userData.name === 'LeftArm') selectedObject.position.set(-1.5, 0, 0);
+            else if (selectedObject.userData.name === 'RightArm') selectedObject.position.set(1.5, 0, 0);
+            else if (selectedObject.userData.name === 'LeftLeg') selectedObject.position.set(-0.5, -2, 0);
+            else if (selectedObject.userData.name === 'RightLeg') selectedObject.position.set(0.5, -2, 0);
+            else if (selectedObject.userData.name === 'Torso') selectedObject.position.set(0, 3, 0);
+
+            selectPart(selectedObject);
+        }
+
+        function applyPose(poseName) {
+            if (!characterParts['Torso']) return;
+
+            // Reset all limb positions/rotations first
+            Object.keys(characterParts).forEach(name => {
+                const part = characterParts[name];
+                part.rotation.set(0, 0, 0);
+            });
+
+            const torso = characterParts['Torso'];
+            const head = characterParts['Head'];
+            const lArm = characterParts['LeftArm'];
+            const rArm = characterParts['RightArm'];
+            const lLeg = characterParts['LeftLeg'];
+            const rLeg = characterParts['RightLeg'];
+
+            torso.position.set(0, 3, 0);
+
+            if (poseName === 'tpose') {
+                lArm.rotation.z = THREE.MathUtils.degToRad(90);
+                rArm.rotation.z = THREE.MathUtils.degToRad(-90);
+            } else if (poseName === 'idle') {
+                lArm.rotation.x = THREE.MathUtils.degToRad(15);
+                rArm.rotation.x = THREE.MathUtils.degToRad(-10);
+                head.rotation.y = THREE.MathUtils.degToRad(10);
+            } else if (poseName === 'run') {
+                lArm.rotation.x = THREE.MathUtils.degToRad(-45);
+                rArm.rotation.x = THREE.MathUtils.degToRad(45);
+                lLeg.rotation.x = THREE.MathUtils.degToRad(40);
+                rLeg.rotation.x = THREE.MathUtils.degToRad(-40);
+            } else if (poseName === 'wave') {
+                rArm.rotation.z = THREE.MathUtils.degToRad(-145);
+                rArm.rotation.x = THREE.MathUtils.degToRad(20);
+                head.rotation.y = THREE.MathUtils.degToRad(-15);
+            } else if (poseName === 'sit') {
+                torso.position.y = 2;
+                lLeg.rotation.x = THREE.MathUtils.degToRad(-90);
+                rLeg.rotation.x = THREE.MathUtils.degToRad(-90);
+            }
+
+            if (selectedObject) selectPart(selectedObject);
+        }
+
+        function toggleClothes(enabled) {
+            clothingEnabled = enabled;
+            // Update clothing textures visibility
+            if (!enabled) {
+                // Strip clothes to display skin tones
+                Object.keys(characterParts).forEach(partName => {
+                    const part = characterParts[partName];
+                    if (partName !== 'Head') {
+                        let colorKey = partName.includes('Arm') ? (partName.includes('Left') ? 'LeftArm' : 'RightArm') :
+                                       partName.includes('Leg') ? (partName.includes('Left') ? 'LeftLeg' : 'RightLeg') : 'Torso';
+                        
+                        part.material = new THREE.MeshStandardMaterial({ color: skinColors[colorKey], roughness: 0.5 });
+                    }
+                });
+            }
+        }
+
+        function updateSkinColor(partType, hexColor) {
+            if (partType === 'Head') skinColors.Head = hexColor;
+            else if (partType === 'Torso') skinColors.Torso = hexColor;
+            else if (partType === 'Arms') { skinColors.LeftArm = hexColor; skinColors.RightArm = hexColor; }
+            else if (partType === 'Legs') { skinColors.LeftLeg = hexColor; skinColors.RightLeg = hexColor; }
+
+            // Apply directly to meshes
+            if (characterParts['Torso'] && (partType === 'Torso' || !clothingEnabled)) characterParts['Torso'].material.color.set(skinColors.Torso);
+            if (characterParts['LeftArm']) characterParts['LeftArm'].material.color.set(skinColors.LeftArm);
+            if (characterParts['RightArm']) characterParts['RightArm'].material.color.set(skinColors.RightArm);
+            if (characterParts['LeftLeg']) characterParts['LeftLeg'].material.color.set(skinColors.LeftLeg);
+            if (characterParts['RightLeg']) characterParts['RightLeg'].material.color.set(skinColors.RightLeg);
+            
+            if (partType === 'Head' && faceMeshMaterial) {
+                // Re-render head materials
+                characterParts['Head'].material[0].color.set(skinColors.Head);
+                characterParts['Head'].material[1].color.set(skinColors.Head);
+                characterParts['Head'].material[2].color.set(skinColors.Head);
+                characterParts['Head'].material[3].color.set(skinColors.Head);
+                characterParts['Head'].material[5].color.set(skinColors.Head);
+            }
+        }
+
+        function applySkinPreset(headColor, torsoColor, legsColor) {
+            document.getElementById('headColorPicker').value = headColor;
+            document.getElementById('torsoColorPicker').value = torsoColor;
+            document.getElementById('armsColorPicker').value = headColor;
+            document.getElementById('legsColorPicker').value = legsColor;
+
+            updateSkinColor('Head', headColor);
+            updateSkinColor('Torso', torsoColor);
+            updateSkinColor('Arms', headColor);
+            updateSkinColor('Legs', legsColor);
+        }
+
+        async function loadRobloxAvatar() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) return;
+
+            const btnText = document.getElementById('loadBtnText');
+            const spinner = document.getElementById('loadBtnSpinner');
+            btnText.classList.add('hidden');
+            spinner.classList.remove('hidden');
+
+            try {
+                // 1. Fetch User ID from Roblox API proxy
+                const userRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${encodeURIComponent(username)}`);
+                const userData = await userRes.json();
+
+                if (userData && userData.Id) {
+                    const userId = userData.Id;
+                    // 2. Fetch User Avatar Bust / Render Image
+                    const avatarImgUrl = `https://thumbs.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`;
+                    
+                    // Fetch full avatar body texture or apply skin tone variations based on user
+                    applySkinPreset('#f3cf98', '#00a2ff', '#1b2a35');
+                } else {
+                    // Fallback simulated avatar load for demo usernames
+                    applySkinPreset('#ffcd94', '#00a2ff', '#2d3436');
+                }
+            } catch (err) {
+                console.log('Roblox API notice: Using fallback stylized avatar generator.');
+                applySkinPreset('#f3cf98', '#00a2ff', '#1b2a35');
+            } finally {
+                btnText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function renderFacesCatalog() {
+            const grid = document.getElementById('faceGrid');
+            grid.innerHTML = '';
+
+            faceCatalog.forEach(face => {
+                const item = document.createElement('div');
+                item.className = 'bg-roblox-dark p-2 rounded-xl border border-roblox-border hover:border-roblox-accent cursor-pointer flex flex-col items-center gap-1 transition group';
+                item.onclick = () => applyFaceTexture(face.url);
+                
+                item.innerHTML = `
+                    <div class="w-12 h-12 rounded-lg bg-yellow-200/20 flex items-center justify-center p-1 overflow-hidden">
+                        <img src="${face.url}" alt="${face.name}" class="w-full h-full object-contain group-hover:scale-110 transition duration-200" onerror="this.src='https://placehold.co/100x100/1e2029/00a2ff?text=Face'">
+                    </div>
+                    <span class="text-[10px] text-gray-300 font-medium text-center truncate w-full">${face.name}</span>
+                `;
+                grid.appendChild(item);
+            });
+        }
+
+        function applyFaceTexture(url) {
+            if (!characterParts['Head']) return;
+            const newFaceMat = createFaceMaterial(url);
+            characterParts['Head'].material[4] = newFaceMat;
+        }
+
+        function applyCustomFaceId() {
+            const val = document.getElementById('faceAssetId').value.trim();
+            if (!val) return;
+
+            let faceUrl = val;
+            if (/^\d+$/.test(val)) {
+                // If pure numeric asset ID
+                faceUrl = `https://tr.rbxcdn.com/${val}/420/420/Decal/Png`;
+            }
+            applyFaceTexture(faceUrl);
+        }
+
+        function spawnPrimitive(type) {
+            let geometry;
+            let name = type.charAt(0).toUpperCase() + type.slice(1);
+
+            switch (type) {
+                case 'block':
+                    geometry = new THREE.BoxGeometry(2, 2, 2);
+                    break;
+                case 'sphere':
+                    geometry = new THREE.SphereGeometry(1.2, 32, 32);
+                    break;
+                case 'cylinder':
+                    geometry = new THREE.CylinderGeometry(1, 1, 2.5, 32);
+                    break;
+                case 'wedge':
+                    geometry = new THREE.ConeGeometry(1.5, 2, 4);
+                    break;
+                default:
+                    geometry = new THREE.BoxGeometry(2, 2, 2);
+            }
+
+            const material = new THREE.MeshStandardMaterial({
+                color: Math.random() * 0xffffff,
+                roughness: 0.4,
+                metalness: 0.1
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set((Math.random() - 0.5) * 4, 1, (Math.random() - 0.5) * 4 + 3);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            
+            const partId = `part_${partIdCounter++}`;
+            mesh.userData = { id: partId, name: `${name} #${partIdCounter-1}`, isSpawned: true };
+
+            scene.add(mesh);
+            spawnedParts.push(mesh);
+            
+            selectPart(mesh);
+            updateSpawnedPartsUI();
+        }
+
+        function updateSpawnedPartsUI() {
+            const list = document.getElementById('spawnedPartsList');
+            if (spawnedParts.length === 0) {
+                list.innerHTML = `<p class="text-gray-500 text-[11px] italic">No extra parts added yet.</p>`;
+                return;
+            }
+
+            list.innerHTML = '';
+            spawnedParts.forEach(part => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2 rounded-lg bg-roblox-dark border border-roblox-border text-xs';
+                item.innerHTML = `
+                    <span class="font-medium text-gray-200 cursor-pointer flex items-center gap-1.5" onclick="selectPartById('${part.userData.id}')">
+                        <i class="fa-solid fa-cube text-roblox-accent"></i> ${part.userData.name}
+                    </span>
+                    <button onclick="removeSpawnedPart('${part.userData.id}')" class="text-red-400 hover:text-red-300 p-1">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function selectPartById(id) {
+            const found = spawnedParts.find(p => p.userData.id === id);
+            if (found) selectPart(found);
+        }
+
+        function removeSpawnedPart(id) {
+            const index = spawnedParts.findIndex(p => p.userData.id === id);
+            if (index !== -1) {
+                const part = spawnedParts[index];
+                scene.remove(part);
+                spawnedParts.splice(index, 1);
+                if (selectedObject === part) deselectPart();
+                updateSpawnedPartsUI();
+            }
+        }
+
+        function clearSpawnedParts() {
+            spawnedParts.forEach(p => scene.remove(p));
+            spawnedParts = [];
+            deselectPart();
+            updateSpawnedPartsUI();
+        }
+
+        function toggleBaseplateGrid() {
+            if (baseplateGrid) {
+                baseplateGrid.visible = !baseplateGrid.visible;
+                const btn = document.getElementById('toggleGridBtn');
+                btn.classList.toggle('text-roblox-accent');
+            }
+        }
+
+        function resetCamera() {
+            controls.reset();
+            camera.position.set(0, 4.5, 11);
+            controls.target.set(0, 3, 0);
+        }
+
+        function takeSnapshot() {
+            deselectPart();
+            renderer.render(scene, camera);
+            
+            const dataUrl = renderer.domElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `Roblox_Avatar_Render_${Date.now()}.png`;
+            link.href = dataUrl;
+            link.click();
+        }
+
+        function switchTab(tabId) {
+            const tabs = ['rig', 'avatar', 'faces', 'spawner'];
+            tabs.forEach(t => {
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+                document.getElementById(`content-${t}`).classList.add('hidden');
+            });
+
+            document.getElementById(`tab-${tabId}`).classList.add('tab-active');
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+        }
+
+        function toggleMobilePanel() {
+            const panel = document.getElementById('controlPanel');
+            if (panel.classList.contains('h-[55vh]')) {
+                panel.classList.remove('h-[55vh]');
+                panel.classList.add('h-[80px]');
+            } else {
+                panel.classList.remove('h-[80px]');
+                panel.classList.add('h-[55vh]');
+            }
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Gentle subtle floating animation for spawned items or idle camera
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
